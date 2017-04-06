@@ -157,9 +157,9 @@ class SidePanel():
         self.red_deploy_button.grid(row=1, column=3)
 
         self.num_blue_soldier_size_text = tk.StringVar()
-        self.num_blue_soldier_size_text.set("Blue Army Size: 0")
+        self.num_blue_soldier_size_text.set("Blue Army Size: {0:03d}".format(0))
         self.num_red_soldier_size_text = tk.StringVar()
-        self.num_red_soldier_size_text.set("Red Army Size: 0")
+        self.num_red_soldier_size_text.set("Red Army Size: {0:03d}".format(0))
 
         self.num_blue_soldier_label = tk.Label(self.army_deploy, textvariable=self.num_blue_soldier_size_text, fg="blue")
         self.num_red_soldier_label = tk.Label(self.army_deploy, textvariable=self.num_red_soldier_size_text, fg="red")
@@ -262,6 +262,8 @@ class SidePanel():
         self.fixed_rate_escape_button['state'] = 'disabled'
         self.health_threshold_escape_button['state'] = 'disabled'
         self.health_linear_escape_button['state'] = 'disabled'
+        self.fixed_rate_escape_val_entry['state'] = 'disabled'
+        self.health_threshold_escape_val_entry['state'] = 'disabled'
 
     def disable_army_deploy(self):
         self.disable_blue_deploy_button()
@@ -311,6 +313,8 @@ class SidePanel():
         self.fixed_rate_escape_button['state'] = 'normal'
         self.health_threshold_escape_button['state'] = 'normal'
         self.health_linear_escape_button['state'] = 'normal'
+        self.fixed_rate_escape_val_entry['state'] = 'normal'
+        self.health_threshold_escape_val_entry['state'] = 'normal'
 
     def normal_army_deploy(self):
         self.normal_blue_deploy_button()
@@ -410,7 +414,7 @@ class SidePanel():
     # Setter
     def set_total_num_soldier(self, army, num):
         if army.army_id == BLUE_ARMY:
-            self.num_blue_soldier_size_text.set("Blue Army Size: " + str(num))
+            self.num_blue_soldier_size_text.set("Blue Army Size: {0:03d}".format(num))
         elif army.army_id == RED_ARMY:
-            self.num_red_soldier_size_text.set("Red Army Size: " + str(num))
+            self.num_red_soldier_size_text.set("Red Army Size: {0:03d}".format(num))
 

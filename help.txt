@@ -1,0 +1,79 @@
+--------------------------------------------------------------------------
+| Battlefield Simulator HelpDoc (Scrollable!!)                           |
+|                                                                        |
+| Author: Dun Huang                                                      | 
+| Updated: 04/14/2016                                                    |
+--------------------------------------------------------------------------
+
+Welcome to the cruel battlefield. In this simulator, you can customize a map, deploy armies from country Blue and country Red and let them combat and observe time series plot of the battle just happened. To start a battle, users can notice that therer is a side menu on the right. All options will be explained below in detail.
+
+#Simulation Cycle
+
+A simulation begins with deploying soldiers and adding blocks to the map. After both amies have soldiers have more than one soldier, the simulation is alloowed to be started. The simulation will terminate when one army has no survivor or time runs out. Now users are able to plot the result. After clearing the last simlation, users then are allowed to start another round of battle.
+
+#Soldier Behavior:
+
+(1) march: move in order to increase the hit rate towards the chosen target
+(2) attack: attack an enemy if in attack range.
+(3) escape: move away from the enemy army.
+(4) die: health point goes to 0 and be removed from battle field.
+
+#Add Blocks To Map
+
+Users will need to fill in the block width entry to be allowed add blocks. A valid block width is among 3, 5, 7, 9, 11. After entering building mode, users need to press 'ESC' button to exit. A block is where the soldier cannot go across. The path finding algorithm used by this simulator is A*: http://www.redblobgames.com/pathfinding/a-star/implementation.html
+
+#Weapon Selection
+
+Weapon depends a soldier's attack range and hit rate pattern. There are three kinds of weapons to select:
+(1) Machine Gun: able to attack all enemies. The hit rate of machine gun decreases as distance increases. The hit rate shows a sigmoid pattern.
+(2) Sword: only able to attack neigboring enemies (up, bottom, right, left).
+(3) Sniper Rifle: able to attack all enemies. The hit rate of sniper rifle increases as distance increases. The hit rate shows a sigmoid pattern.
+
+#Damage Setting
+
+The damage (in percentage) a soldier can cause to an enemy (when successfully hit) in each attack.
+
+#Attack Target
+
+There are three modes for a soldier to choose an enemy to attack in the attack range:
+(1) Weakest: the enemy with the lowest health point.
+(2) Vulnerable: the enemy which the soldier has the highest hit rate if attack.
+(3) Random: random enemy.
+
+#March Target
+
+There are three modes for a soldier to choose an enemy to move towards(away from) in order to increase hit rate:
+(1) Weakest: the enemy with the lowest health point.
+(2) Vulnerable: the enemy which the soldier has the highest hit rate if attack.
+(3) Random: random enemy.
+
+#Escape Behavior
+
+Therer are three modes for a soldier to decide whether to escape:
+(1) Fixed Rate: the soldier will escape in a fixed chance.
+(2) Threshold: the soldier will 100% escape when health under certain percentage but never escape when above.
+(3) Linear: the chance to escape = 1 - current health percentage.
+
+#Army Deploy
+
+Choose a number of soldiers to deploy for either Blue or Red army. The number of soldiers to be deployed each time is no larger than 25. The total number of soldiers of an army is no larger than 100.
+
+#Start
+
+Start the simulation.
+
+#Clear
+
+Clean both map, soldiers and statistics from last simulation.
+
+#Plot Result
+
+Plot the result of simulation which just terminates.
+
+#Report Bugs
+
+Please contact me through hd200410190@gmail.com
+
+=========================
+   Thank you! Have fun!
+=========================

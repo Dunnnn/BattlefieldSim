@@ -4,7 +4,7 @@ This library provides functions to do validation works
 from constants import *
 
 def is_valid_block_width(var):
-	if is_integer(var) and var >= MIN_BLOCK_WIDTH and var <= MAX_BLOCK_WIDTH:
+	if is_integer(var) and var >= MIN_BLOCK_WIDTH and var <= MAX_BLOCK_WIDTH and var%2 == 1:
 		return True
 	else:
 		return False

@@ -3,19 +3,29 @@ from constants import *
 from validate_lib import *
 from model import *
 from view import BattlefieldView
+from helpwindow import HelpWindow
+import itertools
 
 class SimulatorController():
     def __init__(self):
         self.root = tk.Tk()
         self.root.resizable(width=False, height=False)
         self.view = BattlefieldView(self.root)
-        self.battlefield_map = BattlefieldMap()
+        self.helpwindow = tk.Toplevel(self.root)
+        self.helpwindow.resizable(width=False, height=False)
+        self.helpwindow_view = HelpWindow(self.helpwindow)
+        self.helpwindow.withdraw()
+        self.helpwindow_open = False
+
+
+        self.battlefield_map = BattlefieldMap(BATTLEFIELD_MAP_WIDTH, BATTLEFIELD_MAP_WIDTH)
         self.blue_army = Army(BLUE_ARMY_ITEM_COLOR, BLUE_ARMY) 
-        self.red_army = Army(RED_ARMY_ITEM_COLOR, RED_ARMY, - ROTATE_RADIAN)
+        self.red_army = Army(RED_ARMY_ITEM_COLOR, RED_ARMY)
         self.battle = Battle(self.blue_army, self.red_army, self.battlefield_map)
 
         self.view.sidepanel.start_button.bind("<Button>", self.start_sim)
         self.view.sidepanel.clear_button.bind("<Button>", self.clear_sim)
+        self.view.sidepanel.help_button.bind("<Button>", self.open_help)
         self.view.sidepanel.blue_deploy_button.bind("<Button>", lambda event, army=BLUE_ARMY: self.enter_deploy_army_mode(event, army))
         self.view.sidepanel.red_deploy_button.bind("<Button>", lambda event, army=RED_ARMY: self.enter_deploy_army_mode(event, army))
         self.view.sidepanel.add_block_button.bind("<Button>", self.enter_add_block_mode)
@@ -24,6 +34,14 @@ class SimulatorController():
         self.root.title("Battlefield Simulator")
         self.root.deiconify()
         self.root.mainloop()
+
+    def open_help(self, event):
+        if self.helpwindow_open:
+            self.helpwindow.withdraw()
+            self.helpwindow_open = False
+        else:
+            self.helpwindow.deiconify()
+            self.helpwindow_open = True
   
     def start_sim(self, event):
         if self.blue_army.size() <= 0 or self.red_army.size() <= 0:
@@ -39,10 +57,16 @@ class SimulatorController():
     def sim_next_round(self):
         if self.battle.is_battle_over():
             self.__enable_side_panel()
-            self.set_info_message(WELCOME_TEXT)
+            self.view.sidepanel.normal_plot_button()
+            self.view.sidepanel.disable_start_button()
+            self.set_info_message(SIMULATION_END_TEXT)
             return
         
         self.battle.next_round()
+
+        if DEBUG_MODE:
+            print("ROUND COMPLETED")
+
         self.redraw_armies(self.sim_next_round)
         self.view.sidepanel.set_total_num_soldier(self.blue_army, self.blue_army.size())
         self.view.sidepanel.set_total_num_soldier(self.red_army, self.red_army.size())
@@ -114,7 +138,6 @@ class SimulatorController():
         self.view.sidepanel.disable_add_block()
         self.view.sidepanel.disable_start_button()
         self.view.sidepanel.disable_clear_button()
-        self.view.sidepanel.disable_plot_button()
         self.view.sidepanel.disable_weapon_sel()
         self.view.sidepanel.disable_damage_set()
         self.view.sidepanel.disable_attack_target()
@@ -126,7 +149,6 @@ class SimulatorController():
         self.view.sidepanel.normal_add_block()
         self.view.sidepanel.normal_start_button()
         self.view.sidepanel.normal_clear_button()
-        self.view.sidepanel.normal_plot_button()
         self.view.sidepanel.normal_weapon_sel()
         self.view.sidepanel.normal_damage_set()
         self.view.sidepanel.normal_attack_target()
@@ -153,23 +175,27 @@ class SimulatorController():
         self.view.canvas.unbind("<Leave>")
 
     def choose_area(self, event, outline_color, area_width):
-        self.view.create_chosen_area(event.x, event.y, outline_color, area_width)
+        center_cell = self.battlefield_map.convert_coord_to_cell((event.x, event.y))
+        center_x, center_y = self.battlefield_map.convert_cell_to_coord(center_cell)
+        area_width = area_width * CELL_WIDTH
+        self.view.create_chosen_area(center_x, center_y, outline_color, area_width)
 
     def leave_canvas(self, event):
         self.__leave_canvas()
 
     def add_block(self, event, block_width):
-        if self.view.if_chosen_area_overlap_with_item(SOLDIER_ITEM_TAG) or\
-            self.view.if_chosen_area_cross_border():
+        if self.view.if_chosen_area_overlap_with_item(SOLDIER_ITEM_TAG):
             self.view.mark_chosen_area_red()
         else:
-            self.battlefield_map.add_block(event.x, event.y, block_width)
-            self.view.create_block(event.x, event.y, block_width)
+            center_cell = self.battlefield_map.convert_coord_to_cell((event.x, event.y))
+            center_x, center_y = self.battlefield_map.convert_cell_to_coord(center_cell)
+            block_list = self.battlefield_map.add_blocks(center_cell, block_width)
+            for block_x, block_y in block_list:
+                self.view.create_block((block_x+0.5)*CELL_WIDTH, (block_y+0.5)*CELL_WIDTH, CELL_WIDTH)
 
 
     def add_soldiers(self, event, army):
-        center_x = event.x
-        center_y = event.y
+        center_x, center_y = self.battlefield_map.convert_coord_to_cell((event.x, event.y))
 
         if self.view.if_chosen_area_overlap_with_item(SOLDIER_ITEM_TAG) or\
             self.view.if_chosen_area_overlap_with_item(BLOCK_ITEM_TAG) or\
@@ -182,9 +208,10 @@ class SimulatorController():
                 self.__quit_place_mode(OVER_MAX_NUM_SOLDIER_TEXT, WARNING_MESSAGE_TYPE)
                 return
 
-            army.add_soldiers(num_soldiers=self.num_soldier, center_x=center_x, center_y=center_y, damage=self.damage, weapon_type=self.weapon_type,\
+            new_soldiers = army.add_soldiers(num_soldiers=self.num_soldier, center_x=center_x, center_y=center_y, damage=self.damage, weapon_type=self.weapon_type,\
                     attack_target_mode=self.attack_target_mode, march_target_mode=self.march_target_mode, escape_behavior_mode=self.escape_behavior_mode,\
                     escape_fixed_rate=self.escape_fixed_rate, escape_threshold=self.escape_threshold)
+            self.battlefield_map.add_soldiers(new_soldiers)
             self.view.sidepanel.set_total_num_soldier(army, total_num_soldier)
             self.redraw_armies()
 
@@ -194,6 +221,9 @@ class SimulatorController():
         self.view.clear_canvas()
         self.view.sidepanel.set_total_num_soldier(self.blue_army, self.blue_army.size())
         self.view.sidepanel.set_total_num_soldier(self.red_army, self.red_army.size())
+        self.view.sidepanel.normal_start_button()
+        self.view.sidepanel.disable_plot_button()
+        self.view.sidepanel.set_info_message(WELCOME_TEXT)
 
     def __leave_canvas(self):
         self.view.clear_chosen_area()
@@ -221,7 +251,8 @@ class SimulatorController():
             self.draw_soldier(soldier, army_item_color)
 
     def draw_soldier(self, soldier, army_item_color):
-        self.view.create_soldier_item(soldier.x, soldier.y, army_item_color, SOLDIER_WIDTH)
+        coord_x, coord_y = self.battlefield_map.convert_cell_to_coord((soldier.x, soldier.y))
+        self.view.create_soldier_item(coord_x, coord_y, army_item_color, SOLDIER_WIDTH)
 
     def clear_items_withtag(self, tag):
         self.view.clear_items_withtag(tag)

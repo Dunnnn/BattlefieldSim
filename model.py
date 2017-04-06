@@ -1,30 +1,16 @@
-import copy
 import numpy as np
 import functools
 import random
 import threading
-from math import sin, cos, atan2, sqrt, pi
+import copy
+
+from math import sin, cos, atan2, sqrt, pi, exp
 
 from util_lib import *
 from constants import * 
+import itertools
 
-class Singleton(type):
-	"""
-	This class is for keeping only one instance for the same mode.
-	Two modes are the same if the mode type and values are the same.
-	"""
-	_instances = []
-	def __call__(cls, *args, **kwargs):
-		new_instance = super(Singleton, cls).__call__(*args, **kwargs)
-		index = None
-
-		try:
-			index =  cls._instances.index(new_instance)
-			return cls._instances[index]
-		except ValueError:
-			cls._instances.append(new_instance)
-			return new_instance
-
+# Classes below are business logic classes
 class Battle():
 	def __init__(self, army_a, army_b, battlefield_map):
 		self.army_a = army_a
@@ -45,8 +31,8 @@ class Battle():
 		self.army_b.move(self.army_a, self.battlefield_map)
 
 	def cast_move(self):
-		self.army_a.cast_move()
-		self.army_b.cast_move()
+		self.army_a.cast_move(self.battlefield_map)
+		self.army_b.cast_move(self.battlefield_map)
 
 	def attack_round(self):
 		self.army_a.attack(self.army_b)
@@ -57,8 +43,8 @@ class Battle():
 		self.army_b.cast_damage()
 
 	def remove_death(self):
-		self.army_a.remove_death()
-		self.army_b.remove_death()
+		self.army_a.remove_death(self.battlefield_map)
+		self.army_b.remove_death(self.battlefield_map)
 
 	def record_round(self):
 		self.survivor_record[0, self.current_round] = self.army_a.size()
@@ -87,32 +73,37 @@ class Battle():
 		self.army_b.clear()
 
 class Army(): 
-    def __init__(self, army_item_color, army_id, rotate_radian=ROTATE_RADIAN):
+    def __init__(self, army_item_color, army_id):
     	self.soldier_list = []
     	self.soldier_factory = SoldierFactory()
     	self.army_item_color = army_item_color
     	self.army_id = army_id
-    	self.rotate_radian = rotate_radian
 
     def add_soldiers(self, num_soldiers, center_x, center_y, damage, weapon_type, attack_target_mode, march_target_mode, escape_behavior_mode, escape_fixed_rate=None, escape_threshold=None):
-    	relative_pos_indices = np.random.choice((int)(DEPLOY_ARMY_RECT_WIDTH / SOLDIER_WIDTH)**2, size=num_soldiers, replace=False)
-    	x_pos = np.floor((relative_pos_indices/(DEPLOY_ARMY_RECT_WIDTH / SOLDIER_WIDTH))) * SOLDIER_WIDTH + SOLDIER_WIDTH / 2
-    	y_pos = (relative_pos_indices%(DEPLOY_ARMY_RECT_WIDTH / SOLDIER_WIDTH)) * SOLDIER_WIDTH + SOLDIER_WIDTH / 2
+    	relative_pos_indices = np.random.choice(DEPLOY_ARMY_RECT_WIDTH**2, size=num_soldiers, replace=False)
+    	x_pos = np.floor((relative_pos_indices/DEPLOY_ARMY_RECT_WIDTH))
+    	y_pos = (relative_pos_indices%DEPLOY_ARMY_RECT_WIDTH)
 
-    	start_x = center_x - DEPLOY_ARMY_RECT_WIDTH / 2
-    	start_y = center_y - DEPLOY_ARMY_RECT_WIDTH / 2
+    	start_x = center_x - (DEPLOY_ARMY_RECT_WIDTH - 1) / 2
+    	start_y = center_y - (DEPLOY_ARMY_RECT_WIDTH - 1) / 2
     	
-    	abs_x_coord_array = start_x + x_pos
-    	abs_y_coord_array = start_y + y_pos
+    	abs_x_array = start_x + x_pos
+    	abs_y_array = start_y + y_pos
 
+    	new_soldier_list = []
 
-    	for i in range(len(abs_x_coord_array)):
-    		soldier = self.soldier_factory.generate_soldier(x=abs_x_coord_array[i], y=abs_y_coord_array[i],\
+    	for i in range(len(abs_x_array)):
+    		x = (int)(abs_x_array[i])
+    		y = (int)(abs_y_array[i])
+    		soldier = self.soldier_factory.generate_soldier(x=x, y=y,\
     			damage=damage, weapon_type=weapon_type, attack_target_mode=attack_target_mode,\
     			march_target_mode=march_target_mode, escape_behavior_mode=escape_behavior_mode,\
     			escape_fixed_rate=escape_fixed_rate, escape_threshold=escape_threshold)
     		
     		self.soldier_list.append(soldier)
+    		new_soldier_list.append(soldier)
+
+    	return new_soldier_list
 
     def move(self, enemy_army, battlefield_map):
     	"""
@@ -126,22 +117,32 @@ class Army():
 
     	threads = []
     	for soldier in self.soldier_list:
-    		sema.acquire()
     		t=threading.Thread(target=soldier.move, args=(self, friend_center, enemy_army, enemy_center, battlefield_map, sema))
-    		t.start()
     		threads.append(t)
 
-    def cast_move(self):
+    	for thread in threads:
+    		thread.start()
+
+    	for thread in threads:
+    		thread.join()
+
+    def cast_move(self, battlefield_map):
     	for soldier in self.soldier_list:
-    		soldier.x = soldier.x + soldier.to_move_x
-    		soldier.y = soldier.y + soldier.to_move_y
+    		to_x = soldier.x + soldier.to_move_x
+    		to_y = soldier.y + soldier.to_move_y
+    		if battlefield_map.not_occupied((to_x, to_y)):
+    			del battlefield_map.soldiers[(soldier.x, soldier.y)]
+    			soldier.x = to_x
+    			soldier.y = to_y
+    			battlefield_map.add_soldier((to_x, to_y))
+
     		soldier.to_move_x = 0
     		soldier.to_move_y = 0
     		
     def attack(self, enemy_army):
     	"""
     	This function only stores the total damage in the enemy Soldier Object. Attack will be
-		executed in cast_move()
+		executed in cast_attack()
     	"""
     	for soldier in self.soldier_list:
     		soldier.attack(enemy_army)
@@ -151,9 +152,10 @@ class Army():
     		soldier.health_point = soldier.health_point - soldier.damage_to_bear
     		soldier.damage_to_bear = 0
 
-    def remove_death(self):
+    def remove_death(self, battlefield_map):
     	for soldier in self.soldier_list:
     		if soldier.is_dead():
+    			del battlefield_map.soldiers[(soldier.x, soldier.y)]
     			self.soldier_list.remove(soldier)
 
     def center(self):
@@ -162,7 +164,7 @@ class Army():
     	for soldier in self.soldier_list:
     		total_x += soldier.x
     		total_y += soldier.y
-    	return total_x/self.size(), total_y/self.size()
+    	return (int)(total_x/self.size()), (int)(total_y/self.size())
 
     def get_soldiers(self):
     	return self.soldier_list
@@ -176,18 +178,18 @@ class Army():
 class SoldierFactory():
 	def generate_soldier(self, x, y, damage, weapon_type, attack_target_mode, march_target_mode, escape_behavior_mode, escape_fixed_rate=None, escape_threshold=None):
 		if attack_target_mode == WEAKEST_TARGET_OPTION:
-			attack_target_mode = WeakestTargetMode()
+			attack_target_mode = WeakestAttackTargetMode()
 		elif attack_target_mode == VULNERABLE_TARGET_OPTION:
-			attack_target_mode = VulnerableTargetMode()
+			attack_target_mode = VulnerableAttackTargetMode()
 		elif attack_target_mode == RANDOM_TARGET_OPTION:
-			attack_target_mode = RandomTargetMode()
+			attack_target_mode = RandomAttackTargetMode()
 
 		if march_target_mode == WEAKEST_TARGET_OPTION:
-			march_target_mode = WeakestTargetMode()
+			march_target_mode = WeakestMarchTargetMode()
 		elif march_target_mode == VULNERABLE_TARGET_OPTION:
-			march_target_mode = VulnerableTargetMode()
+			march_target_mode = VulnerableMarchTargetMode()
 		elif march_target_mode == RANDOM_TARGET_OPTION:
-			march_target_mode = RandomTargetMode()
+			march_target_mode = RandomMarchTargetMode()
 
 		if escape_behavior_mode == FIXED_RATE_OPTION:
 			escape_behavior_mode = FixedRateEscapeMode(escape_fixed_rate)
@@ -223,6 +225,7 @@ class Soldier():
 			enemy.damage_to_bear += self.damage
 
 	def move(self, friend_army, friend_center, enemy_army, enemy_center, battlefield_map, sema):
+		sema.acquire()
 		escape = self.escape_behavior_mode.if_escape(self)
 
 		if escape:
@@ -237,57 +240,63 @@ class Soldier():
 
 	def escape(self, friend_army, friend_center, enemy_army, enemy_center, battlefield_map):
 		target_x, target_y = 2 * np.array(list(friend_center)) - np.array(list(enemy_center))
+		intersection_point = caculate_intersection_with_border((self.x, self.y), (target_x, target_y), BATTLEFIELD_WIDTH, CELL_WIDTH)
+		target_x, target_y = find_closest_passable_cell(intersection_point, battlefield_map)
 		self.to_move_x, self.to_move_y = self.caculate_movement(self.x, self.y, target_x, target_y, friend_army, enemy_army, battlefield_map)
 
+	def get_enemies_in_attack_range(self, enemy_army):
+		results = {}
+		for enemy in enemy_army.get_soldiers():
+			euclidean_distance = euclidean_dist((self.x, self.y), (enemy.x, enemy.y))
+			if euclidean_distance <= self.attack_range:
+				results[enemy] = euclidean_distance
+
+		return results
+
 	def caculate_movement(self, start_x, start_y, target_x, target_y, friend_army, enemy_army, battlefield_map):
-		start_point = Point(start_x, start_y)
-		target_point = Point(target_x, target_y)
-		connection_line_segment = LineSegment(start_point, target_point)
+		start = (start_x, start_y)
+		target = (target_x, target_y)
+		frontier = PriorityQueue()
+		frontier.put(start, 0)
+		came_from = {}
+		cost_so_far = {}
+		came_from[start] = None
+		cost_so_far[start] = 0
 
-		if connection_line_segment.get_mod() <= SOLDIER_MOVE_SPEED:
-			dir_x, dir_y = np.array(list(connection_line_segment.get_direction())) * SOLDIER_MOVE_SPEED
-			connection_line_segment = LineSegment(start_point, Point(start_x + dir_x, start_y + dir_y))
+		while not frontier.empty():
+			current = frontier.get()
 
-		block_list = battlefield_map.get_block_list()
+			if current == target:
+				break
+        
+			for next in battlefield_map.passable_neighbors(current):
+				new_cost = cost_so_far[current] + battlefield_map.cost(current, next)
+				if next not in cost_so_far or new_cost < cost_so_far[next]:
+					cost_so_far[next] = new_cost
+					priority = new_cost + heuristic(target, next)
+					frontier.put(next, priority)
+					came_from[next] = current
 
-		rotated = 0
+		current = target
+		previous = None
 
-		# If the movement goes cross any block, then rotate
-		while (connection_line_segment.if_cross_any_block(block_list)) and rotated < 2 * pi:
-			connection_line_segment = connection_line_segment.rotate_clockwise(friend_army.rotate_radian)
-			rotated += ROTATE_RADIAN
-
-		# If the final result still cross block, then stay still
-		if connection_line_segment.if_cross_any_block(block_list):
+		try:
+			came_from[current]
+		except KeyError:
+			if DEBUG_MODE:
+				print('No Path Between')
+				print(start)
+				print(target)
 			return 0, 0
-		
-		to_move_x, to_move_y =  np.array(list(connection_line_segment.get_direction())) * SOLDIER_MOVE_SPEED 
 
-		# Check if cross border
-		target_point = Point(start_x + to_move_x, start_y + to_move_y)
-		connection_line_segment = LineSegment(start_point, target_point)
+		while current != start:
+			previous = current
+			current = came_from[current]
 
-		rotated = 0
-
-		while (connection_line_segment.if_cross_border() or connection_line_segment.if_cross_any_block(block_list)) and rotated < 2 * pi:
-			connection_line_segment = connection_line_segment.rotate_clockwise(ROTATE_RADIAN)
-			rotated += ROTATE_RADIAN
-
-		if connection_line_segment.if_cross_border() or connection_line_segment.if_cross_any_block(block_list):
+		if previous:
+			return previous[0] - start_x, previous[1] - start_y
+		else:
 			return 0, 0
-
-		to_move_x, to_move_y =  np.array(list(connection_line_segment.get_direction())) * SOLDIER_MOVE_SPEED
-
-		#dest_x = start_x + to_move_x
-		#dest_y = start_y + to_move_y
-		#dest_circle = Circle(dest_x, dest_y, SOLDIER_WIDTH / 2)
-
-		#for soldier in friend_army.get_soldiers() + enemy_army.get_soldiers():
-		#	soldier_circle = Circle(soldier.x, soldier.y, SOLDIER_WIDTH / 2)
-		#	if soldier_circle.if_cross_circle(dest_circle):
-		#		return 0, 0
-
-		return to_move_x, to_move_y
 
 	def hit_rate(self, enemy):
 		pass
@@ -301,9 +310,12 @@ class Soldier():
 class Ranger(Soldier):
 	def __init__(self, x, y, damage, attack_target_mode, march_target_mode, escape_behavior_mode):
 		Soldier.__init__(self, x, y, damage, attack_target_mode, march_target_mode, escape_behavior_mode)
+		self.attack_range = 1000
 
 	def hit_rate(self, enemy):
-		return 0
+		"""Sigmoid function"""
+		dist = euclidean_dist((self.x, self.y), (enemy.x, enemy.y)) * CELL_WIDTH
+		return 1 / (1 + exp(0.01 * dist-5))
 
 	def march(self, friend_army, enemy_army, battlefield_map):
 		target = self.march_target_mode.choose_target(self, enemy_army)
@@ -314,11 +326,12 @@ class Ranger(Soldier):
 class Saber(Soldier):
 	def __init__(self, x, y, damage, attack_target_mode, march_target_mode, escape_behavior_mode):
 		Soldier.__init__(self, x, y, damage, attack_target_mode, march_target_mode, escape_behavior_mode)
+		self.attack_range = SABER_ATTACK_RANGE
 
 	def hit_rate(self, enemy):
-		point_self = Point(self.x, self.y)
-		point_enemy = Point(enemy.x ,enemy.y)
-		dist = point_self.dist(point_enemy)
+		point_self = (self.x, self.y)
+		point_enemy = (enemy.x ,enemy.y)
+		dist = heuristic(point_self, point_enemy)
 		if dist <= SABER_ATTACK_RANGE:
 			return 1
 		else:
@@ -333,14 +346,19 @@ class Saber(Soldier):
 class Sniper(Soldier):
 	def __init__(self, x, y, damage, attack_target_mode, march_target_mode, escape_behavior_mode):
 		Soldier.__init__(self, x, y, damage, attack_target_mode, march_target_mode, escape_behavior_mode)
+		self.attack_range = 1000
 	
 	def hit_rate(self, enemy):
-		return 0
+		"""An inverse version of sigmoid function"""
+		dist = euclidean_dist((self.x, self.y), (enemy.x, enemy.y)) * CELL_WIDTH
+		return -1 / (1 + exp(0.03 * dist-4) ) + 1
 
 	def march(self, friend_army, enemy_army, battlefield_map):
 		target = self.march_target_mode.choose_target(self, enemy_army)
 		target_x = 2 * self.x - target.x
 		target_y = 2 * self.y - target.y
+		intersection_point = caculate_intersection_with_border((self.x, self.y), (target_x, target_y), BATTLEFIELD_WIDTH, CELL_WIDTH)
+		target_x, target_y = find_closest_passable_cell(intersection_point, battlefield_map)
 		self.to_move_x, self.to_move_y = self.caculate_movement(self.x, self.y, target_x, target_y, friend_army, enemy_army, battlefield_map)
 
 class BehaviorMode(metaclass=Singleton):
@@ -361,51 +379,80 @@ class BehaviorMode(metaclass=Singleton):
 		return hash(tuple(sorted(self.__dict__.items())))
 
 class TargetMode(BehaviorMode):
-	def __init__(self):
-		pass
-
 	def choose_target(self, decider, enemy_army):
 		pass
 
-class WeakestTargetMode(TargetMode):
-	def __init__(self):
-		pass
-
+class WeakestAttackTargetMode(TargetMode):
 	def choose_target(self, decider, enemy_army):
 		weakest = random.choice(enemy_army.get_soldiers())
-		for enemy in enemy_army.get_soldiers():
-			if enemy.health_point < weakest.health_point:
+		enemies_in_range = decider.get_enemies_in_attack_range(enemy_army)
+		for enemy in enemies_in_range:
+			if enemy.health_point <= weakest.health_point:
 				weakest = enemy
 
 		return weakest
 
-class VulnerableTargetMode(TargetMode):
-	def __init__(self):
-		pass
+class WeakestMarchTargetMode(TargetMode):
+	def choose_target(self, decider, enemy_army):
+		weakest = random.choice(enemy_army.get_soldiers())
+		for enemy in enemy_army.get_soldiers():
+			if enemy.health_point <= weakest.health_point:
+				weakest = enemy
 
+		return weakest
+
+class VulnerableAttackTargetMode(TargetMode):
+	def choose_target(self, decider, enemy_army):
+		"""Hacky way to decide the most vulnerable enemy"""
+		vulnerable = random.choice(enemy_army.get_soldiers())
+		enemies_in_range = decider.get_enemies_in_attack_range(enemy_army)
+		if isinstance(decider, Sniper):
+			for enemy in enemies_in_range:
+				decider_pos = (decider.x, decider.y)
+				vulnerable_pos = (vulnerable.x, vulnerable.y)
+				if enemies_in_range[enemy] > euclidean_dist(vulnerable_pos, decider_pos) :
+					vulnerable = enemy
+		else:
+			for enemy in enemies_in_range:
+				decider_pos = (decider.x, decider.y)
+				vulnerable_pos = (vulnerable.x, vulnerable.y)
+				if enemies_in_range[enemy] < euclidean_dist(vulnerable_pos, decider_pos):
+					vulnerable = enemy
+
+		return vulnerable
+
+class VulnerableMarchTargetMode(TargetMode):
 	def choose_target(self, decider, enemy_army):
 		"""Hacky way to decide the most vulnerable enemy"""
 		vulnerable = random.choice(enemy_army.get_soldiers())
 		if isinstance(decider, Sniper):
 			for enemy in enemy_army.get_soldiers():
-				enemy_pos = Point(enemy.x, enemy.y)
-				decider_pos = Point(decider.x, decider.y)
-				if decider_pos.dist(enemy) > decider_pos.dist(vulnerable):
+				enemy_pos = (enemy.x, enemy.y)
+				decider_pos = (decider.x, decider.y)
+				vulnerable_pos = (vulnerable.x, vulnerable.y)
+				if euclidean_dist(enemy_pos, decider_pos) > euclidean_dist(vulnerable_pos, decider_pos) :
 					vulnerable = enemy
 		else:
 			for enemy in enemy_army.get_soldiers():
-				enemy_pos = Point(enemy.x, enemy.y)
-				decider_pos = Point(decider.x, decider.y)
-				if decider_pos.dist(enemy) < decider_pos.dist(vulnerable):
+				enemy_pos = (enemy.x, enemy.y)
+				decider_pos = (decider.x, decider.y)
+				vulnerable_pos = (vulnerable.x, vulnerable.y)
+				if euclidean_dist(enemy_pos, decider_pos) < euclidean_dist(vulnerable_pos, decider_pos):
 					vulnerable = enemy
 
 		return vulnerable
 
 
-class RandomTargetMode(TargetMode):
-	def __init__(self):
-		pass
+class RandomAttackTargetMode(TargetMode):
+	def choose_target(self, decider, enemy_army):
+		random_enemy = random.choice(enemy_army.get_soldiers())
+		enemies_in_range = decider.get_enemies_in_attack_range(enemy_army)
+		if enemies_in_range:
+			random_enemy = random.choice(list(enemies_in_range.keys()))
 
+		return random_enemy
+
+class RandomMarchTargetMode(TargetMode):
 	def choose_target(self, decider, enemy_army):
 		return random.choice(enemy_army.get_soldiers())
 
@@ -443,158 +490,85 @@ class LinearEscapeMode(EscapeBehaviorMode):
 	def escape_rate(self, decider):
 		return 1 - decider.health_point/100
 
-class Block():
-	def __init__(self, x, y, width):
-		self.x = x
-		self.y = y
-		self.width = width
-
 class BattlefieldMap():
-	def __init__(self):
-		self.block_list = []
+	"""A battlefield map is a grid list"""
+	def __init__(self, width, height):
+		self.width = width
+		self.height = height
+		self.blocks = {}
+		self.soldiers = {}
+		self.weights = {}
 
-	def add_block(self, x, y, width):
-		self.block_list.append(Block(x, y, width))
+	def cost(self, from_node, to_node):
+		return self.weights.get(to_node, 1)
 
-	def get_block_list(self):
-		return self.block_list
+	def in_bounds(self, id):
+		(x, y) = id
+		return 0 <= x < self.width and 0 <= y < self.height
+
+	def passable(self, id):
+		try:
+			self.blocks[id]
+			return False
+		except KeyError:
+			return True
+
+	def not_occupied(self, id):
+		try:
+			self.soldiers[id]
+			return False
+		except KeyError:
+			return True
+
+	def add_soldier(self, id):
+		self.soldiers[id] = True
+
+	def add_soldiers(self, soldiers):
+		for soldier in soldiers:
+			self.add_soldier((soldier.x, soldier.y))
+
+	def add_block(self, id):
+		self.blocks[id] = True
+
+	def add_blocks(self, center_id, width):
+		(center_x, center_y) = center_id
+
+		start_x = (int) (center_x - (width - 1) / 2)
+		end_x = (int) (center_x + (width - 1) / 2)
+		start_y = (int) (center_y - (width - 1) / 2)
+		end_y = (int) (center_y + (width - 1) / 2)
+		x_list = list(range(start_x, end_x + 1))
+		y_list = list(range(start_y, end_y + 1))
+		blocks_to_add = list(itertools.product(x_list, y_list))
+		blocks_to_add = filter(self.in_bounds, blocks_to_add)
+		blocks_to_add = list(filter(self.passable, blocks_to_add))
+
+		for block in blocks_to_add:
+			self.add_block(block)
+
+		return blocks_to_add
+
+	def passable_neighbors(self, id):
+		unfiltered_result = self.neighbors(id)
+		results = filter(self.passable, unfiltered_result)
+		return results
+
+	def neighbors(self, id):
+		(x, y) = id
+		results = [(x+1, y), (x, y-1), (x-1, y), (x, y+1)]
+		if (x + y) % 2 == 0: results.reverse() # aesthetics
+		results = filter(self.in_bounds, results)
+	
+		return list(results)
+
+	def convert_coord_to_cell(self, coords):
+		(coord_x, coord_y) = coords
+		return (int) (coord_x / CELL_WIDTH), (int) (coord_y / CELL_WIDTH)
+
+	def convert_cell_to_coord(self, id):
+		(x, y) = id
+		return CELL_WIDTH / 2 + x * CELL_WIDTH, CELL_WIDTH / 2 + y * CELL_WIDTH
 
 	def clear(self):
-		self.block_list.clear()
-
-class Point():
-	def __init__(self, x, y):
-		self.x = x
-		self.y = y
-
-	def dist(self, other_point):
-		delta_x = self.x - other_point.x
-		delta_y = self.y - other_point.y
-		return sqrt(delta_x**2 + delta_y**2)
-
-class Circle():
-	def __init__(self, center_x, center_y, radius):
-		self.center_x = center_x
-		self.center_y = center_y
-		self.radius = radius
-
-	def if_cross_circle(self, other_circle):
-		delta_x = self.center_x - other_circle.center_x
-		delta_y = self.center_y - other_circle.center_y
-		dist = sqrt(delta_x**2 + delta_y**2)
-
-		if dist < (self.radius + other_circle.radius):
-			return True
-		else:
-			return False
-
-class LineSegment():
-	def __init__(self, start_point, end_point):
-		self.start_point = start_point
-		self.end_point = end_point
-
-	def get_direction(self):
-		delta_x = self.end_point.x - self.start_point.x
-		delta_y = self.end_point.y - self.start_point.y
-		mod = sqrt(delta_x**2 + delta_y**2)
-		return delta_x/mod, delta_y/mod
-
-	def get_mod(self):
-		delta_x = self.end_point.x - self.start_point.x
-		delta_y = self.end_point.y - self.start_point.y
-		mod = sqrt(delta_x**2 + delta_y**2)
-		return mod
-
-	def if_rect_cross(self, other_line):
-		q1 = self.start_point
-		q2 = self.end_point
-		p1 = other_line.start_point
-		p2 = other_line.end_point
-
-		if min(p1.x,p2.x) <= max(q1.x,q2.x) and\
-		    min(q1.x,q2.x) <= max(p1.x,p2.x) and\
-		    min(p1.y,p2.y) <= max(q1.y,q2.y) and\
-		    min(q1.y,q2.y) <= max(p1.y,p2.y):
-		    return True
-		else:
-			return False
-
-	def if_inside_rect(self, diagonal_line):
-		q1 = self.start_point
-		q2 = self.end_point
-		p1 = diagonal_line.start_point
-		p2 = diagonal_line.end_point
-
-		if min(p1.x, p2.x) <= min(q1.x, q2.x) and\
-			min(p1.y, p2.y) <= min(q1.y, q2.y) and\
-			max(p1.x, p2.x) >= max(q1.x, q2.x) and\
-			max(p1.y, p2.y) >= max(q1.y, q2.y):
-			if q1.x == q2.x and (q1.x == p1.x or q1.x == p2.x):
-				return False
-			elif q1.y == q2.y and (q1.y == p1.y or q1.y == q2.y):
-				return False
-			else:
-				return True
-		else:
-			return False
-
-
-	def if_cross_line_segment(self, other_line):
-  		if(self.if_rect_cross(other_line)):
-  			q1 = self.start_point
-  			q2 = self.end_point
-  			p1 = other_line.start_point
-  			p2 = other_line.end_point
-
-  			if (((q1.x-p1.x)*(q1.y-q2.y)-(q1.y-p1.y)*(q1.x-q2.x)) * ((q1.x-p2.x)*(q1.y-q2.y)-(q1.y-p2.y)*(q1.x-q2.x))) < 0 and\
-  			(((p1.x-q1.x)*(p1.y-p2.y)-(p1.y-q1.y)*(p1.x-p2.x)) * ((p1.x-q2.x)*(p1.y-p2.y)-(p1.y-q2.y)*(p1.x-p2.x))) < 0:
-  				return True
-
-  		return False
-
-	def if_cross_block(self, block, border=False):
-		half_width = block.width / 2
-		point_one = Point(block.x - half_width, block.y - half_width)
-		point_two = Point(block.x - half_width, block.y + half_width)
-		point_three = Point(block.x + half_width, block.y + half_width)
-		point_four = Point(block.x + half_width, block.y - half_width)
-
-		line_segment_one = LineSegment(point_one, point_two)
-		line_segment_two = LineSegment(point_two, point_three)
-		line_segment_three = LineSegment(point_three, point_four)
-		line_segment_four  = LineSegment(point_four, point_one)
-
-		diagonal_line_segment = LineSegment(point_one, point_three)
-
-		if self.if_cross_line_segment(line_segment_one) or\
-			self.if_cross_line_segment(line_segment_two) or\
-			self.if_cross_line_segment(line_segment_three) or\
-			self.if_cross_line_segment(line_segment_four):
-			return True
-		elif not border and self.if_inside_rect(diagonal_line_segment):
-			return True 
-		else:
-			return False
-
-	def if_cross_any_block(self, block_list):
-		for block in block_list:
-			if self.if_cross_block(block):
-				return True
-
-		return False
-
-	def if_cross_border(self, border_width=BATTLEFIELD_WIDTH):
-		border_block = Block(border_width/2 - 0.5, border_width/2 - 0.5, border_width + 1 - SOLDIER_WIDTH)
-		return self.if_cross_block(border_block, border=True)
-	
-	def rotate_clockwise(self, radian):
-	    delta_x = self.end_point.x - self.start_point.x
-	    delta_y = self.end_point.y - self.start_point.y
-	    mod = sqrt(delta_x**2 + delta_y**2)
-	    new_angle = atan2(delta_y, delta_x) - radian
-	    new_delta_x = cos(new_angle) * mod
-	    new_delta_y = sin(new_angle) * mod
-	    return LineSegment(self.start_point, Point(self.start_point.x + new_delta_x, self.start_point.y + new_delta_y))
-
-	def __str__(self):
-		return str((self.start_point.x, self.start_point.y, self.end_point.x, self.end_point.y))
+		self.blocks.clear()
+		self.soldiers.clear()
