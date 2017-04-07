@@ -315,7 +315,7 @@ class Ranger(Soldier):
 	def hit_rate(self, enemy):
 		"""Sigmoid function"""
 		dist = euclidean_dist((self.x, self.y), (enemy.x, enemy.y)) * CELL_WIDTH
-		return 1 / (1 + exp(0.01 * dist-5))
+		return 1 / (1 + exp(0.01 * dist-1))
 
 	def march(self, friend_army, enemy_army, battlefield_map):
 		target = self.march_target_mode.choose_target(self, enemy_army)
@@ -351,7 +351,7 @@ class Sniper(Soldier):
 	def hit_rate(self, enemy):
 		"""An inverse version of sigmoid function"""
 		dist = euclidean_dist((self.x, self.y), (enemy.x, enemy.y)) * CELL_WIDTH
-		return -1 / (1 + exp(0.03 * dist-4) ) + 1
+		return -1 / (1 + exp(0.02 * dist-9) ) + 1
 
 	def march(self, friend_army, enemy_army, battlefield_map):
 		target = self.march_target_mode.choose_target(self, enemy_army)
