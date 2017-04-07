@@ -94,3 +94,9 @@ SABER_ATTACK_RANGE = 1
 DEBUG_MODE = False
 
 HELP_FILE = "help.txt"
+
+
+PLOT_TITLE = "Number of survivors vs. Time"
+X_LABEL = "Time"
+LEGEND = ['Red, R(t)', 'Blue, B(t)']
+LEGEND_LOC = 0

@@ -24,7 +24,7 @@ class Battle():
 		self.current_round = 0
 		self.survivor_record = np.zeros((2, self.max_round+1))
 		self.survivor_record[0, 0] = self.army_a.size()
-		self.survivor_record[1, 1] = self.army_b.size()
+		self.survivor_record[1, 0] = self.army_b.size()
 
 	def move_round(self):
 		self.army_a.move(self.army_b, self.battlefield_map)

@@ -1,21 +1,35 @@
 import tkinter as tk
+import itertools
+import numpy as np
+
 from constants import *
 from validate_lib import *
 from model import *
 from view import BattlefieldView
 from helpwindow import HelpWindow
-import itertools
+from plotwindow import PlotWindow
+
 
 class SimulatorController():
     def __init__(self):
+        # Main Window
         self.root = tk.Tk()
         self.root.resizable(width=False, height=False)
         self.view = BattlefieldView(self.root)
+
+        # Help Doc
         self.helpwindow = tk.Toplevel(self.root)
         self.helpwindow.resizable(width=False, height=False)
         self.helpwindow_view = HelpWindow(self.helpwindow)
         self.helpwindow.withdraw()
-        self.helpwindow_open = False
+        self.helpwindow_view.opened = False
+
+        # Plot Display
+        self.plotwindow = tk.Toplevel(self.root)
+        self.plotwindow.resizable(width=False, height=False)
+        self.plotwindow_view = PlotWindow(self.plotwindow)
+        self.plotwindow.withdraw()
+        self.plotwindow_view.opened = False
 
 
         self.battlefield_map = BattlefieldMap(BATTLEFIELD_MAP_WIDTH, BATTLEFIELD_MAP_WIDTH)
@@ -26,6 +40,8 @@ class SimulatorController():
         self.view.sidepanel.start_button.bind("<Button>", self.start_sim)
         self.view.sidepanel.clear_button.bind("<Button>", self.clear_sim)
         self.view.sidepanel.help_button.bind("<Button>", self.open_help)
+        self.view.sidepanel.plot_button.bind("<Button>", self.display_result)
+
         self.view.sidepanel.blue_deploy_button.bind("<Button>", lambda event, army=BLUE_ARMY: self.enter_deploy_army_mode(event, army))
         self.view.sidepanel.red_deploy_button.bind("<Button>", lambda event, army=RED_ARMY: self.enter_deploy_army_mode(event, army))
         self.view.sidepanel.add_block_button.bind("<Button>", self.enter_add_block_mode)
@@ -36,13 +52,30 @@ class SimulatorController():
         self.root.mainloop()
 
     def open_help(self, event):
-        if self.helpwindow_open:
+        if self.helpwindow_view.opened:
             self.helpwindow.withdraw()
-            self.helpwindow_open = False
+            self.helpwindow_view.opened = False
         else:
             self.helpwindow.deiconify()
-            self.helpwindow_open = True
-  
+            self.helpwindow_view.opened = True
+
+    def display_result(self, event):
+        if self.plotwindow_view.opened:
+            self.plotwindow.withdraw()
+            self.plotwindow_view.opened = False
+        else:
+            self.plotwindow.deiconify()
+            self.plotwindow_view.opened = True
+
+    def plot_result(self):
+        record = self.battle.get_battle_record()
+        time = record.shape[1]
+        T = np.arange(time)
+        self.plotwindow_view.plot(T, record[0, :], 'b', T, record[1, :], 'r')
+        self.plotwindow_view.title(PLOT_TITLE)
+        self.plotwindow_view.xlabel(X_LABEL)
+        self.plotwindow_view.legend(LEGEND, loc=LEGEND_LOC)
+
     def start_sim(self, event):
         if self.blue_army.size() <= 0 or self.red_army.size() <= 0:
             self.set_warning_message(NOT_ENOUGH_SOLDIER_TEXT)
@@ -60,6 +93,7 @@ class SimulatorController():
             self.view.sidepanel.normal_plot_button()
             self.view.sidepanel.disable_start_button()
             self.set_info_message(SIMULATION_END_TEXT)
+            self.plot_result()
             return
         
         self.battle.next_round()
@@ -216,9 +250,17 @@ class SimulatorController():
             self.redraw_armies()
 
     def clear_sim(self, event):
+        # Model Clear
         self.battlefield_map.clear()
         self.battle.clear()
+
+        # Main Window Clear
         self.view.clear_canvas()
+
+        # Plot Clear
+        self.plotwindow_view.clear()
+
+        # Side Panel Adjustment
         self.view.sidepanel.set_total_num_soldier(self.blue_army, self.blue_army.size())
         self.view.sidepanel.set_total_num_soldier(self.red_army, self.red_army.size())
         self.view.sidepanel.normal_start_button()

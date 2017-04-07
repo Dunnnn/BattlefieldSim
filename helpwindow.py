@@ -5,6 +5,7 @@ class HelpWindow():
 	def __init__(self, master):
 		master.title("Help")
 		master.protocol('WM_DELETE_WINDOW', self.hide_window)
+		self.opened = False
 		self.master = master
 		self.frame = tk.Frame(master)
 		self.frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
@@ -34,3 +35,4 @@ class HelpWindow():
 
 	def hide_window(self):
 		self.master.withdraw()
+		self.opened = False
