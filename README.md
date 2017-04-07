@@ -1,7 +1,7 @@
 # Introduction:
 BattlefieldSim is a python tkinter written simulator to simulate combats between two forces. Users are allowed to customize maps, weapons, behavior modes and army deployment in this simulator. After each battle, a plot can be generated to display combat statistics.
 
-# Verson:
+# Version:
 1.0
 
 # Enviroment:
