@@ -18,7 +18,8 @@ class BattlefieldView():
     def create_chosen_area(self, center_x, center_y, outline_color, area_width):
     	self.clear_chosen_area()
     	half_width = area_width / 2
-    	self.chosen_area = self.canvas.create_rectangle((center_x - half_width, center_y - half_width, center_x + half_width, center_y + half_width), outline=outline_color, tags="chosen_area")
+        # Hard coding 2 to correct pos a little to allow choose neigbors of blocks
+    	self.chosen_area = self.canvas.create_rectangle((center_x - half_width + 2, center_y - half_width + 2, center_x + half_width - 2, center_y + half_width - 2), outline=outline_color, tags="chosen_area")
 
     def create_block(self, center_x, center_y, block_width):
     	half_width = block_width / 2
