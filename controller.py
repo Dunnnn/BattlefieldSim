@@ -89,7 +89,7 @@ class SimulatorController():
 
     def sim_next_round(self):
         if self.battle.is_battle_over():
-            self.__enable_side_panel()
+            self.view.sidepanel.normal_clear_button()
             self.view.sidepanel.normal_plot_button()
             self.view.sidepanel.disable_start_button()
             self.set_info_message(SIMULATION_END_TEXT)
@@ -263,7 +263,7 @@ class SimulatorController():
         # Side Panel Adjustment
         self.view.sidepanel.set_total_num_soldier(self.blue_army, self.blue_army.size())
         self.view.sidepanel.set_total_num_soldier(self.red_army, self.red_army.size())
-        self.view.sidepanel.normal_start_button()
+        self.__enable_side_panel()
         self.view.sidepanel.disable_plot_button()
         self.view.sidepanel.set_info_message(WELCOME_TEXT)
 
