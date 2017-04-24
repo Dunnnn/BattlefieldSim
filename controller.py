@@ -82,7 +82,7 @@ class SimulatorController():
             return 
 
         self.set_info_message("Simulating...")
-        self.__disable_side_panel()
+        self.__disable_side_panel__()
         self.battle.start()
 
         self.sim_next_round()
@@ -160,7 +160,7 @@ class SimulatorController():
 
         # Disable All Side Buttons
         self.set_warning_message(PLACE_TEXT)
-        self.__disable_side_panel()
+        self.__disable_side_panel__()
 
         # Bind Function to return escape the mode
         self.root.bind("<Escape>", lambda event, msg=WELCOME_TEXT, msg_type=INFO_MESSAGE_TYPE: self.quit_place_mode(event, msg, msg_type))
@@ -168,7 +168,7 @@ class SimulatorController():
         # Bind Function To Canvas
         self.view.canvas.bind("<Leave>", self.leave_canvas)
 
-    def __disable_side_panel(self):
+    def __disable_side_panel__(self):
         self.view.sidepanel.disable_add_block()
         self.view.sidepanel.disable_start_button()
         self.view.sidepanel.disable_clear_button()
@@ -179,7 +179,7 @@ class SimulatorController():
         self.view.sidepanel.disable_escape_behav()
         self.view.sidepanel.disable_army_deploy()
 
-    def __enable_side_panel(self):
+    def __enable_side_panel__(self):
         self.view.sidepanel.normal_add_block()
         self.view.sidepanel.normal_start_button()
         self.view.sidepanel.normal_clear_button()
@@ -191,16 +191,16 @@ class SimulatorController():
         self.view.sidepanel.normal_army_deploy()
 
     def quit_place_mode(self, event, msg, msg_type):
-        self.__quit_place_mode(msg, msg_type)
+        self.__quit_place_mode__(msg, msg_type)
 
-    def __quit_place_mode(self, msg, msg_type):
+    def __quit_place_mode__(self, msg, msg_type):
         # Enable all available side buttons
         self.set_message(msg, msg_type)
 
-        self.__enable_side_panel()
+        self.__enable_side_panel__()
 
         # Clear canvas
-        self.__leave_canvas()
+        self.__leave_canvas__()
 
         # Unbind events
         self.root.unbind("<Escape>")
@@ -215,7 +215,7 @@ class SimulatorController():
         self.view.create_chosen_area(center_x, center_y, outline_color, area_width)
 
     def leave_canvas(self, event):
-        self.__leave_canvas()
+        self.__leave_canvas__()
 
     def add_block(self, event, block_width):
         if self.view.if_chosen_area_overlap_with_item(SOLDIER_ITEM_TAG):
@@ -239,7 +239,7 @@ class SimulatorController():
             total_num_soldier = army.size() + self.num_soldier
 
             if not is_valid_total_num_soldier(total_num_soldier):
-                self.__quit_place_mode(OVER_MAX_NUM_SOLDIER_TEXT, WARNING_MESSAGE_TYPE)
+                self.__quit_place_mode__(OVER_MAX_NUM_SOLDIER_TEXT, WARNING_MESSAGE_TYPE)
                 return
 
             new_soldiers = army.add_soldiers(num_soldiers=self.num_soldier, center_x=center_x, center_y=center_y, damage=self.damage, weapon_type=self.weapon_type,\
@@ -263,11 +263,11 @@ class SimulatorController():
         # Side Panel Adjustment
         self.view.sidepanel.set_total_num_soldier(self.blue_army, self.blue_army.size())
         self.view.sidepanel.set_total_num_soldier(self.red_army, self.red_army.size())
-        self.__enable_side_panel()
+        self.__enable_side_panel__()
         self.view.sidepanel.disable_plot_button()
         self.view.sidepanel.set_info_message(WELCOME_TEXT)
 
-    def __leave_canvas(self):
+    def __leave_canvas__(self):
         self.view.clear_chosen_area()
 
     def set_message(self, msg, msg_type):
